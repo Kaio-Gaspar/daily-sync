@@ -1,0 +1,72 @@
+name: sync
+on:
+  schedule:
+    - cron: '40 14 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  TZ: America/Sao_Paulo
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      pular: ${{ steps.p.outputs.pular }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.R }}
+          ssh-key: ${{ secrets.K }}
+          path: w
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: ${{ secrets.S }}
+      - id: p
+        run: bash "w/${{ secrets.E }}" prep > /dev/null 2>&1 || true
+  b:
+    needs: a
+    if: needs.a.outputs.pular != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        i: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.R }}
+          ssh-key: ${{ secrets.K }}
+          path: w
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: ${{ secrets.S }}
+      - run: bash "w/${{ secrets.E }}" ler ${{ matrix.i }} 8 > /dev/null 2>&1 || true
+  c:
+    needs: [a, b]
+    if: always() && needs.a.outputs.pular != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.R }}
+          ssh-key: ${{ secrets.K }}
+          path: w
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: ${{ secrets.S }}
+      - run: bash "w/${{ secrets.E }}" fim > /dev/null 2>&1 || true
+      - uses: actions/checkout@v4
+        with:
+          path: self
+      - name: keep
+        run: |
+          cd self
+          if [ ! -f .keep ] || [ $(( $(date +%s) - $(git log -1 --format=%ct -- .keep 2>/dev/null || echo 0) )) -gt 2000000 ]; then
+            date +%F > .keep
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .keep && git commit -q -m "update" && git push -q || true
+          fi
